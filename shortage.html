@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>부족품목 체크리스트</title>
+<style>
+  :root { --gap:10px; --radius:10px; --soft:#f4f6f8; --line:#e5e8eb; }
+  *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; margin:0; background:#fff; color:#111}
+  header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:14px}
+  main{max-width:700px;margin:0 auto;padding:16px}
+  h1{font-size:18px;margin:0 0 8px}
+  .row{display:flex;gap:var(--gap);flex-wrap:wrap}
+  input,select,button,textarea{font:inherit}
+  input[type="text"], input[type="number"], textarea, select{
+    padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;flex:1;min-width:120px
+  }
+  textarea{min-height:60px;resize:vertical}
+  .btn{padding:10px 14px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer}
+  .btn.primary{background:#111;color:#fff;border-color:#111}
+  .btn.ghost{background:#fff}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .card{background:var(--soft);padding:12px;border-radius:var(--radius);border:1px solid var(--line)}
+  .list{display:flex;flex-direction:column;gap:10px}
+  .item{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px}
+  .item.done{opacity:.55}
+  .title{font-weight:600}
+  .meta{font-size:12px;color:#666;margin-top:4px}
+  .cat{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:#fafbfc;margin-right:6px}
+  .qty{font-size:12px;background:#f0f3f5;border-radius:6px;padding:2px 6px;margin-left:6px}
+  .actions{display:flex;gap:6px}
+  .search{display:flex;gap:8px}
+  .preset-wrap{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px dashed var(--line);padding:6px 10px;border-radius:999px;background:#fff;cursor:pointer;font-size:13px}
+  .chip:hover{background:#f9fafb}
+  .muted{color:#777;font-size:12px}
+  .split{display:flex;gap:12px;flex-wrap:wrap}
+  .split > *{flex:1;min-width:240px}
+  footer{padding:50px 16px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧾 부족품목 체크리스트</h1>
+  <div class="muted" id="today"></div>
+</header>
+
+<main>
+  <!-- 설정 -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="row">
+      <input id="storeName" type="text" placeholder="가게 이름(예: OO카페)" />
+      <input id="senderName" type="text" placeholder="보내는 사람(예: 상혁)" />
+      <button class="btn" id="saveSettingsBtn">설정 저장</button>
+    </div>
+    <div class="muted" style="margin-top:6px">설정은 자동 저장됩니다.</div>
+  </div>
+
+  <!-- 입력 폼 -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="row">
+      <input id="nameInput" type="text" placeholder="품목명 (예: 얼음컵 L)" />
+      <input id="qtyInput" type="number" min="1" step="1" placeholder="수량 (예: 3)" />
+      <select id="catInput">
+        <option value="식자재">식자재</option>
+        <option value="음료">음료</option>
+        <option value="포장/소모품">포장/소모품</option>
+        <option value="기타" selected>기타</option>
+      </select>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <textarea id="memoInput" placeholder="메모 (예: 특정 브랜드, 규격 등)"></textarea>
+    </div>
+    <div class="toolbar">
+      <button class="btn primary" id="addBtn">+ 추가</button>
+      <button class="btn ghost" id="clearFormBtn">입력 초기화</button>
+    </div>
+  </div>
+
+  <!-- 프리셋 -->
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div><strong>프리셋(자주 부족)</strong></div>
+      <div class="muted">길게 눌러 편집/삭제</div>
+    </div>
+    <div class="preset-wrap" id="presetWrap"></div>
+    <div class="toolbar" style="margin-top:10px">
+      <input id="presetInput" type="text" placeholder="프리셋 추가 (쉼표로 카테고리: 품목)" />
+      <button class="btn" id="presetAddBtn">프리셋 추가</button>
+      <button class="btn" id="presetResetBtn">기본 프리셋 불러오기</button>
+    </div>
+  </div>
+
+  <!-- 검색/정렬/도구 -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="search">
+      <input id="searchInput" type="text" placeholder="검색 (품목/메모/카테고리)" />
+      <select id="sortSelect">
+        <option value="created">정렬: 추가순</option>
+        <option value="cat">정렬: 카테고리→이름</option>
+        <option value="name">정렬: 이름 순</option>
+      </select>
+      <button class="btn" id="toggleHideDoneBtn">완료 숨김: 끔</button>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="copyBtn">📋 마감용 텍스트 복사</button>
+      <button class="btn" id="shareBtn">📤 공유하기</button>
+      <button class="btn" id="exportBtn">⬇️ 백업(JSON)</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+      <button class="btn" id="importBtn">⬆️ 불러오기</button>
+      <button class="btn" id="clearAllBtn">🧹 전체 비우기</button>
+      <button class="btn" id="undoBtn">↩️ 되돌리기</button>
+    </div>
+  </div>
+
+  <!-- 리스트 -->
+  <div id="emptyState" class="muted" style="text-align:center;margin:30px 0">아직 항목이 없어요. 위에서 추가해보세요!</div>
+  <div id="list" class="list" aria-live="polite"></div>
+</main>
+
+<footer></footer>
+
+<script>
+/* ---------- 데이터 ---------- */
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>document.querySelectorAll(s);
+const LS_KEY = 'shortage.items.v1';
+const LS_PRESET = 'shortage.presets.v1';
+const LS_SETTINGS = 'shortage.settings.v1';
+let items = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+let presets = JSON.parse(localStorage.getItem(LS_PRESET) || 'null');
+let settings = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null');
+let undoStack = [];
+
+const defaultPresets = [
+  {cat:'포장/소모품', name:'빨대(일반)', qty:1, memo:''},
+  {cat:'포장/소모품', name:'뚜껑(아이스 L)', qty:1, memo:''},
+  {cat:'포장/소모품', name:'얼음컵(L)', qty:1, memo:''},
+  {cat:'식자재', name:'시럽(바닐라)', qty:1, memo:'브랜드 고정'},
+  {cat:'음료', name:'탄산수', qty:2, memo:''},
+  {cat:'기타', name:'라벨지', qty:1, memo:''},
+];
+
+if (!Array.isArray(presets)) presets = defaultPresets;
+if (!settings) settings = { storeName:'', senderName:'' };
+
+savePresets(); saveSettings();
+
+/* ---------- 유틸 ---------- */
+const now = new Date();
+$('#today').textContent = new Intl.DateTimeFormat('ko-KR', {
+  dateStyle:'full', timeStyle:'short'
+}).format(now);
+
+function saveItems(){ localStorage.setItem(LS_KEY, JSON.stringify(items)); }
+function savePresets(){ localStorage.setItem(LS_PRESET, JSON.stringify(presets)); }
+function saveSettings(){ localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function confirmYN(msg){ return window.confirm(msg); }
+function toast(msg){ alert(msg); } // 심플 버전
+
+/* ---------- 렌더링 ---------- */
+function renderList(){
+  const list = $('#list');
+  const empty = $('#emptyState');
+  const term = $('#searchInput').value.trim().toLowerCase();
+  const hideDone = $('#toggleHideDoneBtn').dataset.hide === '1';
+  const sort = $('#sortSelect').value;
+
+  let view = items.slice();
+
+  // 검색 필터
+  if (term) {
+    view = view.filter(v =>
+      (v.name||'').toLowerCase().includes(term) ||
+      (v.memo||'').toLowerCase().includes(term) ||
+      (v.cat||'').toLowerCase().includes(term)
+    );
+  }
+  // 완료 숨김
+  if (hideDone) view = view.filter(v => !v.done);
+
+  // 정렬
+  if (sort === 'cat') {
+    view.sort((a,b)=> (a.cat||'').localeCompare(b.cat||'') || (a.name||'').localeCompare(b.name||''));
+  } else if (sort === 'name') {
+    view.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+  } else { // created
+    view.sort((a,b)=> a.created - b.created);
+  }
+
+  list.innerHTML = '';
+  if (view.length === 0) {
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    for (const it of view) {
+      const li = document.createElement('div');
+      li.className = 'item' + (it.done ? ' done' : '');
+      li.innerHTML = `
+        <input type="checkbox" ${it.done?'checked':''} aria-label="완료체크" />
+        <div>
+          <div class="title">
+            ${escapeHTML(it.name)}
+            ${it.qty ? `<span class="qty">x ${it.qty}</span>`:''}
+          </div>
+          <div class="meta">
+            <span class="cat">${escapeHTML(it.cat||'기타')}</span>
+            ${it.memo ? `<span>${escapeHTML(it.memo)}</span>`:''}
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn" data-act="edit">수정</button>
+          <button class="btn" data-act="del">삭제</button>
+        </div>
+      `;
+      // 이벤트
+      const checkbox = li.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => { it.done = checkbox.checked; saveItems(); renderList(); });
+
+      li.querySelector('[data-act="edit"]').addEventListener('click', () => editItem(it.id));
+      li.querySelector('[data-act="del"]').addEventListener('click', () => deleteItem(it.id));
+
+      list.appendChild(li);
+    }
+  }
+}
+
+function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+/* ---------- 아이템 CRUD ---------- */
+function addItem(data){
+  const it = {
+    id: uid(),
+    name: (data.name||'').trim(),
+    qty: Number(data.qty||'') || '',
+    cat: (data.cat||'기타').trim(),
+    memo: (data.memo||'').trim(),
+    done: false,
+    created: Date.now()
+  };
+  if (!it.name) return toast('품목명을 입력하세요.');
+  items.push(it);
+  saveItems(); renderList();
+}
+
+function editItem(id){
+  const it = items.find(v=>v.id===id);
+  if (!it) return;
+  const name = prompt('품목명', it.name);
+  if (name===null) return; // 취소
+  const qty = prompt('수량(숫자, 비우면 표시 안함)', it.qty || '');
+  if (qty===null) return;
+  const cat = prompt('카테고리(식자재/음료/포장/소모품/기타 등)', it.cat || '기타');
+  if (cat===null) return;
+  const memo = prompt('메모', it.memo || '');
+  if (memo===null) return;
+  undoPush();
+  it.name = name.trim();
+  it.qty = qty.trim()==='' ? '' : (Number(qty)||'');
+  it.cat = (cat||'기타').trim();
+  it.memo = (memo||'').trim();
+  saveItems(); renderList();
+}
+
+function deleteItem(id){
+  const idx = items.findIndex(v=>v.id===id);
+  if (idx<0) return;
+  if (!confirmYN('정말 삭제할까요?')) return;
+  undoPush();
+  items.splice(idx,1);
+  saveItems(); renderList();
+}
+
+/* ---------- 되돌리기 ---------- */
+function undoPush(){ undoStack.push(JSON.stringify(items)); if (undoStack.length>20) undoStack.shift(); }
+function undo(){ if (!undoStack.length) return toast('되돌릴 내용이 없어요.'); items = JSON.parse(undoStack.pop()); saveItems(); renderList(); }
+
+/* ---------- 프리셋 ---------- */
+function renderPresets(){
+  const wrap = $('#presetWrap');
+  wrap.innerHTML = '';
+  for (const p of presets){
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = `${p.cat} · ${p.name}${p.qty?` x${p.qty}`:''}`;
+    chip.addEventListener('click', ()=> addItem(p));
+    // 길게 눌러 편집/삭제
+    let pressTimer;
+    chip.addEventListener('mousedown', ()=> pressTimer = setTimeout(()=> editPreset(p), 550));
+    chip.addEventListener('mouseup', ()=> clearTimeout(pressTimer));
+    chip.addEventListener('mouseleave', ()=> clearTimeout(pressTimer));
+    wrap.appendChild(chip);
+  }
+}
+function editPreset(p){
+  if (!confirmYN('프리셋을 수정/삭제할까요? 확인=수정, 취소=삭제')) {
+    // 삭제
+    presets = presets.filter(x=>x!==p);
+    savePresets(); renderPresets(); return;
+  }
+  const name = prompt('품목명', p.name); if (name===null) return;
+  const qty = prompt('수량(숫자, 비워두면 표시 안함)', p.qty || '');
+  if (qty===null) return;
+  const cat = prompt('카테고리', p.cat || '기타'); if (cat===null) return;
+  const memo = prompt('메모', p.memo || ''); if (memo===null) return;
+  p.name = (name||'').trim();
+  p.qty = (qty||'').toString().trim()==='' ? '' : (Number(qty)||'');
+  p.cat = (cat||'기타').trim();
+  p.memo = (memo||'').trim();
+  savePresets(); renderPresets();
+}
+
+/* ---------- 내보내기/공유 ---------- */
+function buildReport(){
+  const date = new Intl.DateTimeFormat('ko-KR',{ dateStyle:'medium'}).format(new Date());
+  const store = $('#storeName').value.trim();
+  const sender = $('#senderName').value.trim();
+  const lines = [];
+  lines.push(`[${store || '가게'}] ${date} 마감 부족품목`);
+  const cats = {};
+  for (const it of items){
+    if (!cats[it.cat||'기타']) cats[it.cat||'기타'] = [];
+    if (it.done) continue; // 완료 체크한 건 빼고 보고
+    const name = it.name;
+    const qty = it.qty ? ` x${it.qty}` : '';
+    const memo = it.memo ? ` (${it.memo})` : '';
+    cats[it.cat||'기타'].push(`• ${name}${qty}${memo}`);
+  }
+  const catOrder = Object.keys(cats).sort();
+  for (const c of catOrder){
+    if (cats[c].length===0) continue;
+    lines.push('');
+    lines.push(`# ${c}`);
+    lines.push(...cats[c]);
+  }
+  if (catOrder.length===0) lines.push('\n(부족 품목 없음)');
+  lines.push('\n— ' + (sender || '직원'));
+  return lines.join('\n');
+}
+
+async function copyReport(){
+  const text = buildReport();
+  await navigator.clipboard.writeText(text);
+  toast('마감용 텍스트가 클립보드에 복사되었습니다. 카톡/문자에 붙여넣기 하세요!');
+}
+
+async function shareReport(){
+  const text = buildReport();
+  if (navigator.share){
+    try { await navigator.share({ text }); }
+    catch(e){ /* 취소 등 무시 */ }
+  } else {
+    await navigator.clipboard.writeText(text);
+    toast('공유 API 미지원: 텍스트를 복사했습니다. 붙여넣기 해주세요.');
+  }
+}
+
+/* ---------- 백업/복구 ---------- */
+function exportJSON(){
+  const blob = new Blob([ JSON.stringify({items, presets, settings}, null, 2) ], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'shortage_backup.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+function importJSON(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data.items)) items = data.items;
+      if (Array.isArray(data.presets)) presets = data.presets;
+      if (data.settings) settings = data.settings;
+      saveItems(); savePresets(); saveSettings();
+      applySettingsUI();
+      renderPresets(); renderList();
+      toast('불러오기 완료');
+    } catch(err){ toast('불러오기 실패: 파일을 확인하세요.'); }
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- 설정 ---------- */
+function applySettingsUI(){
+  $('#storeName').value = settings.storeName || '';
+  $('#senderName').value = settings.senderName || '';
+}
+
+/* ---------- 이벤트 바인딩 ---------- */
+$('#addBtn').addEventListener('click', ()=>{
+  const data = {
+    name: $('#nameInput').value,
+    qty: $('#qtyInput').value,
+    cat: $('#catInput').value,
+    memo: $('#memoInput').value
+  };
+  undoPush();
+  addItem(data);
+  clearForm();
+  $('#nameInput').focus();
+});
+$('#clearFormBtn').addEventListener('click', clearForm);
+function clearForm(){ $('#nameInput').value=''; $('#qtyInput').value=''; $('#memoInput').value=''; }
+
+$('#copyBtn').addEventListener('click', copyReport);
+$('#shareBtn').addEventListener('click', shareReport);
+$('#exportBtn').addEventListener('click', exportJSON);
+$('#importBtn').addEventListener('click', ()=> $('#importFile').click());
+$('#importFile').addEventListener('change', (e)=> e.target.files[0] && importJSON(e.target.files[0]));
+$('#clearAllBtn').addEventListener('click', ()=>{
+  if (!confirmYN('전체 비울까요?')) return;
+  undoPush();
+  items = []; saveItems(); renderList();
+});
+$('#undoBtn').addEventListener('click', undo);
+
+$('#searchInput').addEventListener('input', renderList);
+$('#sortSelect').addEventListener('change', renderList);
+$('#toggleHideDoneBtn').addEventListener('click', (e)=>{
+  const b = e.currentTarget;
+  b.dataset.hide = b.dataset.hide==='1' ? '0' : '1';
+  b.textContent = '완료 숨김: ' + (b.dataset.hide==='1' ? '켬' : '끔');
+  renderList();
+});
+
+// 프리셋 추가: "카테고리: 품목명 x수량" 또는 "품목명"
+$('#presetAddBtn').addEventListener('click', ()=>{
+  const raw = $('#presetInput').value.trim();
+  if (!raw) return;
+  const p = parsePreset(raw);
+  presets.push(p); savePresets(); renderPresets();
+  $('#presetInput').value='';
+});
+$('#presetResetBtn').addEventListener('click', ()=>{
+  if (!confirmYN('기본 프리셋으로 덮어쓸까요?')) return;
+  presets = defaultPresets.slice();
+  savePresets(); renderPresets();
+});
+
+$('#saveSettingsBtn').addEventListener('click', ()=>{
+  settings.storeName = $('#storeName').value.trim();
+  settings.senderName = $('#senderName').value.trim();
+  saveSettings();
+  toast('설정 저장 완료');
+});
+
+/* ---------- 파서/초기화 ---------- */
+function parsePreset(s){
+  // 예) "포장/소모품: 얼음컵 L x3"  또는  "얼음컵 L"
+  let cat = '기타', name = s, qty = '';
+  if (s.includes(':')){
+    const [c, rest] = s.split(':');
+    cat = c.trim() || '기타';
+    name = rest.trim();
+  }
+  const x = name.lastIndexOf(' x');
+  if (x>0){
+    const q = Number(name.slice(x+2).trim());
+    if (!Number.isNaN(q)) { qty = q; name = name.slice(0,x).trim(); }
+  }
+  return { cat, name, qty, memo:'' };
+}
+
+// 입력에서 엔터로 추가
+$('#nameInput').addEventListener('keydown', (e)=> { if(e.key==='Enter') $('#addBtn').click(); });
+$('#qtyInput').addEventListener('keydown', (e)=> { if(e.key==='Enter') $('#addBtn').click(); });
+$('#memoInput').addEventListener('keydown', (e)=> { if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) $('#addBtn').click(); });
+
+// 초기 렌더
+applySettingsUI(); renderPresets(); renderList();
+</script>
+</body>
+</html>
